@@ -1,0 +1,10 @@
+# Copy to terraform.tfvars and fill in your values. terraform.tfvars is gitignored.
+region              = "us-east-1"
+project_name        = "receipt-ai"
+
+# Existing AWS resources (created outside this Terraform):
+uploads_bucket_name = "your-receipts-bucket-name"
+ddb_table_name      = "ReceiptHealthAnalysis"
+
+# Must be globally unique. Convention: <project>-web-<account-id>.
+web_bucket_name = "receipt-ai-web-<your-aws-account-id>"
