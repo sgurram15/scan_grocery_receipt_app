@@ -23,7 +23,7 @@ provider "aws" {
 data "aws_caller_identity" "current" {}
 
 locals {
-  account_id        = data.aws_caller_identity.current.account_id
+  account_id         = data.aws_caller_identity.current.account_id
   uploads_bucket_arn = "arn:aws:s3:::${var.uploads_bucket_name}"
   ddb_table_arn      = "arn:aws:dynamodb:${var.region}:${local.account_id}:table/${var.ddb_table_name}"
 }
