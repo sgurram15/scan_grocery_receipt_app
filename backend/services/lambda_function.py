@@ -43,21 +43,39 @@ NON_FOOD_KEYWORDS = {
     "clothes", "shirt", "jeans", "conditioner", "deodorant",
     "toiletries", "razor", "towel", "napkins", "bleach",
     "cleaner", "dish soap", "body wash",
-    "baking soda"
+    "baking soda",
+    "cling film", "tin foil", "kitchen roll", "bin bags", "bin liner",
+    "batteries", "lightbulb", "matches"
 }
 
 # Lines containing any of these words are receipt chrome (totals, promos,
 # store info), not products — drop them before classification.
 RECEIPT_NOISE_KEYWORDS = {
+    # Payment / totals
     "total", "subtotal", "balance", "tender", "change due", "cash", "card",
     "visa", "mastercard", "debit", "credit", "auth", "approved",
+    # Loyalty / promos
     "voucher", "vouchers", "ouchers",
-    "lidlplus", "lidl plus", "clubcard", "nectar", "loyalty",
-    "tid", "mid", "aid", "rrn", "merchant",
+    "lidlplus", "lidl plus", "clubcard", "nectar", "loyalty", "rewards",
+    "price cut", "save ", "discount", "offer",
+    "2 for", "3 for", "buy ", "with lidlplus", "x £",
+    "chance to win", "terms apply", "t&c", "terms and conditions",
+    # Transaction / till metadata
+    "tid", "mid", "aid", "rrn", "merchant", "cashier", "operator",
+    "items sold", "recall from", "transaction", "receipt no",
+    "manager",
+    # Store info / contact
     "customer copy", "retain receipt", "please retain", "thank you",
     "tel", "fax", "vat", "vat no", "vat reg", "company reg",
-    "price cut", "save ", "discount", "offer",
-    "2 for", "3 for", "buy ", "with lidlplus", "x £", "x £",
+    "stores ltd", "storehelp", "www", ".com", ".co.uk", "http",
+}
+
+# Lines whose only content (after stripping punctuation/digits) is a known
+# supermarket name → store-header noise, not a product.
+STORE_NAMES = {
+    "asda", "tesco", "sainsburys", "sainsbury", "morrisons", "waitrose",
+    "lidl", "aldi", "iceland", "coop", "marksandspencer", "ms",
+    "spar", "costco",
 }
 
 
@@ -74,14 +92,40 @@ def matches_keyword(text, keyword):
     return re.search(r'\b' + re.escape(keyword) + r'\b', text) is not None
 
 
+def is_store_header_only(text):
+    # A line whose letters (ignoring punctuation/numbers/spaces) spell a known
+    # supermarket name is the receipt's masthead, not a product.
+    letters_only = re.sub(r'[^a-z]', '', text.lower())
+    return letters_only in STORE_NAMES
+
+
+def is_till_metadata(text):
+    # Receipts often print till state as several "AB. 1234"-style codes on one
+    # line (e.g. "ST. 4685 OP. ScoUser TE. 23 TR. 6863"). Two+ such tokens =
+    # till metadata, not a product.
+    return len(re.findall(r'\b[A-Z]{1,3}\.\s*\w+', text)) >= 2
+
+
+def is_long_digit_run(text):
+    # Lines with a 10+ digit run are reference/transaction numbers, not items.
+    return re.search(r'\d{10,}', text) is not None
+
+
 def is_item_line(text):
-    # Filter receipt chrome (prices, totals, promo banners) so unknown_items
-    # only contains lines that plausibly name a product.
+    # Filter receipt chrome (prices, totals, promo banners, store headers,
+    # till codes) so unknown_items only contains lines that plausibly name
+    # a product.
     stripped = text.strip()
     if len(stripped) < 3:
         return False
     # Needs at least one real word (3+ letters in a row); rejects "2 X £2.15", "1.06".
     if not re.search(r'[A-Za-z]{3,}', stripped):
+        return False
+    if is_store_header_only(stripped):
+        return False
+    if is_till_metadata(stripped):
+        return False
+    if is_long_digit_run(stripped):
         return False
     lower = stripped.lower()
     for noise in RECEIPT_NOISE_KEYWORDS:
